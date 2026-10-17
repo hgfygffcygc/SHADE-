@@ -1,4 +1,6 @@
 import ipaddress
+import hashlib
+import json
 import logging
 import math
 import os
@@ -6,9 +8,11 @@ import re
 import secrets
 import threading
 import time
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import phonenumbers
+import redis
 import requests
 from flask import Flask, jsonify, render_template, request
 from flask_limiter import Limiter
@@ -30,10 +34,15 @@ app.config['MAX_CONTENT_LENGTH'] = 8 * 1024
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
 
+REDIS_URL = os.environ.get('REDIS_URL')
+redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
+if redis_client:
+    redis_client.ping()
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    storage_uri=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
+    storage_uri=os.environ.get('RATELIMIT_STORAGE_URI') or REDIS_URL or 'memory://',
 )
 LOCATION_SHARE_TTL_SECONDS = 10 * 60
 location_shares = {}
@@ -89,7 +98,18 @@ def protect_location_share_responses(response):
     return response
 
 
+def share_session_key(share_id):
+    return f'infog:location-share:session:{share_id}'
+
+
+def share_token_key(token_type, token):
+    digest = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    return f'infog:location-share:{token_type}:{digest}'
+
+
 def prune_location_shares(now=None):
+    if redis_client:
+        return
     now = now or time.time()
     expired = [
         share_id
@@ -101,6 +121,18 @@ def prune_location_shares(now=None):
 
 
 def get_location_share(token, token_type):
+    if redis_client:
+        index_type = {'owner_token': 'owner', 'share_token': 'recipient'}.get(token_type, token_type)
+        index_key = share_token_key(index_type, token)
+        share_id = redis_client.get(index_key)
+        if not share_id:
+            return None
+        raw_session = redis_client.get(share_session_key(share_id))
+        if not raw_session:
+            redis_client.delete(index_key)
+            return None
+        return json.loads(raw_session)
+
     with location_shares_lock:
         prune_location_shares()
         for session in location_shares.values():
@@ -113,18 +145,30 @@ def get_location_share(token, token_type):
 @limiter.limit('5 per hour')
 def create_location_share():
     now = time.time()
-    with location_shares_lock:
-        prune_location_shares(now)
+    session = {
+        'owner_token': secrets.token_urlsafe(32),
+        'share_token': secrets.token_urlsafe(32),
+        'expires_at': now + LOCATION_SHARE_TTL_SECONDS,
+        'result': None,
+    }
+    owner_index = share_token_key('owner', session['owner_token'])
+    recipient_index = share_token_key('recipient', session['share_token'])
+    session['owner_index'] = owner_index
+    session['recipient_index'] = recipient_index
+    if redis_client:
         share_id = secrets.token_urlsafe(16)
-        while share_id in location_shares:
+        pipeline = redis_client.pipeline(transaction=True)
+        pipeline.set(share_session_key(share_id), json.dumps(session), ex=LOCATION_SHARE_TTL_SECONDS)
+        pipeline.set(owner_index, share_id, ex=LOCATION_SHARE_TTL_SECONDS)
+        pipeline.set(recipient_index, share_id, ex=LOCATION_SHARE_TTL_SECONDS)
+        pipeline.execute()
+    else:
+        with location_shares_lock:
+            prune_location_shares(now)
             share_id = secrets.token_urlsafe(16)
-        location_shares[share_id] = {
-            'owner_token': secrets.token_urlsafe(32),
-            'share_token': secrets.token_urlsafe(32),
-            'expires_at': now + LOCATION_SHARE_TTL_SECONDS,
-            'result': None,
-        }
-        session = location_shares[share_id]
+            while share_id in location_shares:
+                share_id = secrets.token_urlsafe(16)
+            location_shares[share_id] = session
 
     return jsonify(
         owner_token=session['owner_token'],
@@ -194,6 +238,32 @@ def submit_location_share():
         'request_ip': request.remote_addr or 'Not available',
         **{field: device.get(field) or 'Not provided' for field in allowed_device_fields},
     }
+    if redis_client:
+        share_id = redis_client.get(share_token_key('recipient', share_token))
+        if not share_id:
+            return jsonify(error='This share link has expired or was already used.'), 404
+        store_result_script = redis_client.register_script("""
+            local raw = redis.call('GET', KEYS[1])
+            if not raw then return 0 end
+            local session = cjson.decode(raw)
+            if session.share_token ~= ARGV[1] then return 0 end
+            if session.result ~= cjson.null then return -1 end
+            local ttl = redis.call('TTL', KEYS[1])
+            if ttl < 1 then return 0 end
+            session.result = cjson.decode(ARGV[2])
+            redis.call('SET', KEYS[1], cjson.encode(session), 'EX', ttl)
+            return 1
+        """)
+        stored = store_result_script(
+            keys=[share_session_key(share_id), share_token_key('recipient', share_token)],
+            args=[share_token, json.dumps(result)],
+        )
+        if stored == 0:
+            return jsonify(error='This share link has expired or was already used.'), 404
+        if stored == -1:
+            return jsonify(error='These details have already been shared.'), 409
+        return jsonify(status='shared'), 201
+
     with location_shares_lock:
         prune_location_shares()
         session = next(
@@ -219,6 +289,27 @@ def close_location_share():
     owner_token = payload.get('owner_token') if isinstance(payload, dict) else None
     if not isinstance(owner_token, str) or len(owner_token) > 128:
         return jsonify(error='Invalid or expired share session.'), 404
+
+    if redis_client:
+        owner_index = share_token_key('owner', owner_token)
+        close_share_script = redis_client.register_script("""
+            local share_id = redis.call('GET', KEYS[1])
+            if not share_id then return 0 end
+            local session_key = ARGV[1] .. share_id
+            local raw = redis.call('GET', session_key)
+            if not raw then redis.call('DEL', KEYS[1]); return 0 end
+            local session = cjson.decode(raw)
+            if session.owner_token ~= ARGV[2] then return 0 end
+            redis.call('DEL', session_key, KEYS[1], session.recipient_index)
+            return 1
+        """)
+        deleted = close_share_script(
+            keys=[owner_index],
+            args=['infog:location-share:session:', owner_token],
+        )
+        if deleted != 1:
+            return jsonify(error='This share link has expired or was already deleted.'), 404
+        return jsonify(status='deleted')
 
     with location_shares_lock:
         prune_location_shares()
@@ -298,7 +389,43 @@ def api_lookup():
         app.logger.warning('Lookup provider failed for mode %s', mode, exc_info=True)
         return jsonify(error='The lookup service could not be reached. Please try again.'), 502
 
-    return jsonify(result=result)
+    report_metadata = {
+        'domain': (
+            'System DNS resolver',
+            'DNS resolution identifies records returned by your resolver; it does not identify a person or prove control.',
+        ),
+        'dns': (
+            'Configured recursive DNS resolver',
+            'DNS records are public configuration data and may be cached or incomplete.',
+        ),
+        'ip': (
+            'geolocation-db.com',
+            'IP geolocation is approximate and describes a network endpoint, not a person or exact device location.',
+        ),
+        'phone': (
+            'Google libphonenumber metadata',
+            'Phone region and carrier are numbering metadata; they do not identify the subscriber or current location.',
+        ),
+        'rdap': (
+            'rdap.org and the relevant registry',
+            'RDAP describes registered domains or allocated network ranges; it may not identify an individual user.',
+        ),
+        'tls': (
+            'Live TLS handshake using the system trust store',
+            'Certificate details describe the HTTPS endpoint reached at lookup time, not the site operator’s identity.',
+        ),
+    }
+    source, caveat = report_metadata[mode]
+    return jsonify(
+        result=result,
+        report={
+            'query': value.strip(),
+            'mode': mode,
+            'source': source,
+            'queried_at': datetime.now(timezone.utc).isoformat(),
+            'caveat': caveat,
+        },
+    )
 
 
 if __name__ == '__main__':

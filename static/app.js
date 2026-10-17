@@ -41,13 +41,19 @@ const resultBody = document.querySelector('#result-body');
 const resultCaption = document.querySelector('#result-caption');
 const resultActions = document.querySelector('#result-actions');
 const copyButton = document.querySelector('#copy-results');
+const exportJsonButton = document.querySelector('#export-json');
+const exportCsvButton = document.querySelector('#export-csv');
 const copyStatus = document.querySelector('#copy-status');
+const reportMeta = document.querySelector('#report-meta');
+const reportSource = document.querySelector('#report-source');
+const reportTime = document.querySelector('#report-time');
+const reportCaveat = document.querySelector('#report-caveat');
 const rememberHistory = document.querySelector('#remember-history');
 const historyList = document.querySelector('#history-list');
 const clearHistoryButton = document.querySelector('#clear-history');
 const historyStorageKey = 'infog.lookup-history.v1';
 const historyEnabledKey = 'infog.lookup-history-enabled.v1';
-let latestResult = null;
+let latestReport = null;
 rememberHistory.checked = localStorage.getItem(historyEnabledKey) === 'true';
 
 document.querySelectorAll('.mode-tab').forEach((tab) => {
@@ -83,10 +89,14 @@ clearHistoryButton.addEventListener('click', () => {
 });
 
 copyButton.addEventListener('click', async () => {
-  if (!latestResult) return;
-  const text = Object.entries(latestResult)
-    .map(([key, value]) => `${key}: ${value == null || value === '' ? 'Unavailable' : value}`)
-    .join('\n');
+  if (!latestReport) return;
+  const text = [
+    `${latestReport.report.mode.toUpperCase()} lookup: ${latestReport.report.query}`,
+    `Source: ${latestReport.report.source}`,
+    `Queried: ${latestReport.report.queried_at}`,
+    ...Object.entries(latestReport.result).map(([key, value]) => `${key}: ${formatValue(value)}`),
+    `Note: ${latestReport.report.caveat}`,
+  ].join('\n');
   try {
     await navigator.clipboard.writeText(text);
     copyStatus.textContent = 'Copied';
@@ -95,6 +105,43 @@ copyButton.addEventListener('click', async () => {
   }
   window.setTimeout(() => { copyStatus.textContent = ''; }, 2200);
 });
+
+exportJsonButton.addEventListener('click', () => {
+  if (latestReport) downloadReport('json', JSON.stringify(latestReport, null, 2));
+});
+
+exportCsvButton.addEventListener('click', () => {
+  if (!latestReport) return;
+  const rows = [
+    ['Field', 'Value'],
+    ['Query', latestReport.report.query],
+    ['Lookup type', latestReport.report.mode],
+    ['Source', latestReport.report.source],
+    ['Queried at', latestReport.report.queried_at],
+    ...Object.entries(latestReport.result).map(([key, value]) => [key, formatValue(value)]),
+    ['Interpretation note', latestReport.report.caveat],
+  ];
+  downloadReport('csv', rows.map((row) => row.map(csvCell).join(',')).join('\r\n'));
+});
+
+function formatValue(value) {
+  if (value == null || value === '') return 'Unavailable';
+  return Array.isArray(value) ? value.join(', ') : String(value);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
+
+function downloadReport(extension, content) {
+  const mimeType = extension === 'json' ? 'application/json' : 'text/csv';
+  const blobUrl = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const anchor = document.createElement('a');
+  anchor.href = blobUrl;
+  anchor.download = `infog-${latestReport.report.mode}-${Date.now()}.${extension}`;
+  anchor.click();
+  URL.revokeObjectURL(blobUrl);
+}
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -114,12 +161,13 @@ form.addEventListener('submit', async (event) => {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'The lookup could not be completed.');
-    renderResults(payload.result);
-    if (rememberHistory.checked) saveHistory(activeMode, value, payload.result);
+    renderResults(payload);
+    if (rememberHistory.checked) saveHistory(activeMode, value, payload);
   } catch (error) {
     resultCaption.textContent = 'Lookup could not be completed.';
-    latestResult = null;
+    latestReport = null;
     resultActions.hidden = true;
+    reportMeta.hidden = true;
     resultBody.innerHTML = '';
     const message = document.createElement('p');
     message.className = 'error-message';
@@ -131,9 +179,14 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
-function renderResults(result) {
-  latestResult = result;
+function renderResults(payload) {
+  const { result, report } = payload;
+  latestReport = payload;
   resultActions.hidden = false;
+  reportMeta.hidden = false;
+  reportSource.textContent = report.source;
+  reportTime.textContent = new Date(report.queried_at).toLocaleString();
+  reportCaveat.textContent = report.caveat;
   resultCaption.textContent = 'Lookup complete.';
   resultBody.innerHTML = '';
   const list = document.createElement('ul');
@@ -147,7 +200,7 @@ function renderResults(result) {
     label.textContent = key;
     const content = document.createElement('span');
     content.className = 'result-value';
-    content.textContent = value == null || value === '' ? 'Unavailable' : String(value);
+    content.textContent = formatValue(value);
     item.append(label, content);
     list.append(item);
   });
@@ -164,9 +217,9 @@ function readHistory() {
   }
 }
 
-function saveHistory(mode, value, result) {
+function saveHistory(mode, value, report) {
   const history = readHistory().filter((item) => !(item.mode === mode && item.value === value));
-  history.unshift({ mode, value, result, time: Date.now() });
+  history.unshift({ mode, value, report, time: Date.now() });
   localStorage.setItem(historyStorageKey, JSON.stringify(history.slice(0, 8)));
   renderHistory();
 }
@@ -204,7 +257,20 @@ function renderHistory() {
       activeMode = item.mode;
       document.querySelector(`.mode-tab[data-mode="${item.mode}"]`)?.click();
       input.value = item.value;
-      renderResults(item.result);
+      if (item.report) {
+        renderResults(item.report);
+      } else {
+        renderResults({
+          result: item.result,
+          report: {
+            mode: item.mode,
+            query: item.value,
+            source: 'Saved result from an earlier version',
+            queried_at: new Date(item.time).toISOString(),
+            caveat: 'This saved result predates source metadata.',
+          },
+        });
+      }
       resultCaption.textContent = `Saved result · ${new Date(item.time).toLocaleString()}`;
     });
     row.append(details, replay);

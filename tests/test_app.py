@@ -1,4 +1,5 @@
 import pytest
+import fakeredis
 
 import app as site
 import utils
@@ -129,6 +130,33 @@ def test_location_share_expires(client, monkeypatch):
     response = client.post('/api/location-share/status', json={'owner_token': share['owner_token']})
 
     assert response.status_code == 404
+
+
+def test_location_share_uses_shared_redis_backend(client, monkeypatch):
+    fake_redis = fakeredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(site, 'redis_client', fake_redis)
+
+    share = create_location_share(client)
+    share_token = share_token_from_url(share['share_url'])
+    waiting = client.post('/api/location-share/status', json={'owner_token': share['owner_token']})
+    submitted = client.post(
+        '/api/location-share/submit',
+        json=location_share_payload(share_token),
+    )
+    duplicate = client.post(
+        '/api/location-share/submit',
+        json=location_share_payload(share_token),
+    )
+    completed = client.post('/api/location-share/status', json={'owner_token': share['owner_token']})
+    deleted = client.post('/api/location-share/close', json={'owner_token': share['owner_token']})
+    expired = client.post('/api/location-share/status', json={'owner_token': share['owner_token']})
+
+    assert waiting.status_code == 200 and waiting.json['result'] is None
+    assert submitted.status_code == 201
+    assert duplicate.status_code == 409
+    assert completed.json['result']['latitude'] == 10.5
+    assert deleted.status_code == 200
+    assert expired.status_code == 404
 
 
 def test_dns_record_lookup_collects_both_families(monkeypatch):
@@ -278,6 +306,10 @@ def test_ip_lookup_returns_provider_data(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json['result']['country_name'] == 'Example'
+    assert response.json['report']['source'] == 'geolocation-db.com'
+    assert response.json['report']['query'] == '8.8.8.8'
+    assert response.json['report']['queried_at'].endswith('+00:00')
+    assert 'approximate' in response.json['report']['caveat']
 
 
 def test_phone_lookup_returns_region_and_carrier(client, monkeypatch):

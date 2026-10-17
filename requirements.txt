@@ -1,6 +1,7 @@
 phonenumbers
 requests
 dnspython
+redis
 Flask
 Flask-Limiter
 gunicorn

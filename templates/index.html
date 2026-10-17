@@ -81,8 +81,15 @@
           <p class="empty-title">Nothing to show yet</p>
           <p class="empty-copy">Choose a lookup and enter a value to get started.</p>
         </div>
+        <div class="report-meta" id="report-meta" hidden>
+          <p><span>Source</span><strong id="report-source"></strong></p>
+          <p><span>Queried</span><strong id="report-time"></strong></p>
+          <p class="report-caveat" id="report-caveat"></p>
+        </div>
         <div class="result-actions" id="result-actions" hidden>
           <button class="utility-button" id="copy-results" type="button" title="Copy results" aria-label="Copy results">Copy results</button>
+          <button class="utility-button" id="export-json" type="button">JSON</button>
+          <button class="utility-button" id="export-csv" type="button">CSV</button>
           <span class="copy-status" id="copy-status" role="status"></span>
         </div>
       </section>

@@ -83,8 +83,14 @@ input::placeholder { color: #a0a79f; }
 .result-value { color: var(--ink); font: 12px var(--mono); text-align: right; overflow-wrap: anywhere; }
 .error-message { width: 100%; padding: 13px; border-left: 3px solid #bd5e43; background: #fbefea; color: #743b2d; font-size: 12px; line-height: 1.5; text-align: left; }
 .loading { color: var(--green); font: 12px var(--mono); }
-.result-actions { display: flex; align-items: center; gap: 11px; padding-top: 12px; }
+.result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; }
 .result-actions[hidden] { display: none; }
+.report-meta { margin-top: 12px; padding: 12px; border-top: 1px solid #e4e9df; background: #f4f6f0; }
+.report-meta[hidden] { display: none; }
+.report-meta p { display: flex; justify-content: space-between; gap: 14px; margin: 0; padding: 4px 0; font-size: 10px; }
+.report-meta p span { flex: 0 0 auto; color: var(--muted); font-family: var(--mono); }
+.report-meta p strong { color: var(--ink); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.report-meta .report-caveat { display: block; margin-top: 5px; padding-top: 9px; border-top: 1px solid var(--line); color: #56645b; font-size: 10px; line-height: 1.6; }
 .utility-button { min-height: 34px; padding: 0 11px; border: 1px solid var(--line); background: white; color: var(--green-dark); font: 600 10px var(--sans); cursor: pointer; }
 .utility-button:hover:not(:disabled) { border-color: var(--green); }
 .utility-button:disabled { color: #a0a79f; cursor: not-allowed; }
