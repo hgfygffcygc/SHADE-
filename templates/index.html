@@ -44,6 +44,15 @@
           <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="phone">
             <span class="tab-icon" aria-hidden="true">#</span><span>Phone</span>
           </button>
+          <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="dns">
+            <span class="tab-icon" aria-hidden="true">⌁</span><span>DNS</span>
+          </button>
+          <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="rdap">
+            <span class="tab-icon" aria-hidden="true">◎</span><span>RDAP</span>
+          </button>
+          <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="tls">
+            <span class="tab-icon" aria-hidden="true">⌑</span><span>TLS</span>
+          </button>
         </div>
 
         <form id="lookup-form">
@@ -88,9 +97,9 @@
     </section>
 
     <section class="info-strip" aria-label="Lookup notes">
-      <div><span class="info-number">A</span><p><strong>Domain</strong><br>Finds the resolved IP address for a hostname.</p></div>
-      <div><span class="info-number">B</span><p><strong>IP address</strong><br>Shows approximate network and location data.</p></div>
-      <div><span class="info-number">C</span><p><strong>Phone</strong><br>Shows numbering region and carrier when available.</p></div>
+      <div><span class="info-number">A</span><p><strong>DNS records</strong><br>Queries public A, AAAA, MX, NS, TXT, and CAA records.</p></div>
+      <div><span class="info-number">B</span><p><strong>RDAP</strong><br>Shows public domain registration or IP network registry data.</p></div>
+      <div><span class="info-number">C</span><p><strong>TLS certificate</strong><br>Inspects the certificate presented by a public HTTPS hostname.</p></div>
     </section>
   </main>
 

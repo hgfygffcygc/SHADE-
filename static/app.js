@@ -14,6 +14,21 @@ const modes = {
     placeholder: '+14155552671',
     hint: 'Include the country code, for example +1',
   },
+  dns: {
+    label: 'Domain name',
+    placeholder: 'example.com',
+    hint: 'Queries public A, AAAA, MX, NS, TXT, and CAA records',
+  },
+  rdap: {
+    label: 'Domain or public IP address',
+    placeholder: 'example.com or 8.8.8.8',
+    hint: 'Looks up public registration or network allocation records',
+  },
+  tls: {
+    label: 'HTTPS hostname',
+    placeholder: 'example.com',
+    hint: 'Inspects the TLS certificate on the hostname’s public HTTPS service',
+  },
 };
 
 let activeMode = 'domain';

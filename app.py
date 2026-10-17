@@ -16,7 +16,14 @@ from flask_limiter.errors import RateLimitExceeded
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from utils import lookup_domain_records, lookup_ip, lookup_phone
+from utils import (
+    lookup_dns_records,
+    lookup_domain_records,
+    lookup_ip,
+    lookup_phone,
+    lookup_rdap,
+    lookup_tls_certificate,
+)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024
@@ -254,11 +261,27 @@ def api_lookup():
         if mode == 'domain':
             hostname = normalize_domain(value)
             result = {'Domain': hostname, **lookup_domain_records(hostname)}
+        elif mode == 'dns':
+            hostname = normalize_domain(value)
+            result = {'Domain': hostname, **lookup_dns_records(hostname)}
         elif mode == 'ip':
             address = str(ipaddress.ip_address(value.strip()))
             if not ipaddress.ip_address(address).is_global:
                 return jsonify(error='Enter a public IP address.'), 400
             result = lookup_ip(address)
+        elif mode == 'rdap':
+            try:
+                address = str(ipaddress.ip_address(value.strip()))
+            except ValueError:
+                domain = normalize_domain(value)
+                result = lookup_rdap(domain, 'domain')
+            else:
+                if not ipaddress.ip_address(address).is_global:
+                    return jsonify(error='Enter a public IP address or domain name.'), 400
+                result = lookup_rdap(address, 'ip')
+        elif mode == 'tls':
+            hostname = normalize_domain(value)
+            result = lookup_tls_certificate(hostname)
         elif mode == 'phone':
             number = phonenumbers.parse(value.strip())
             if not phonenumbers.is_valid_number(number):

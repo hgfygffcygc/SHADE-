@@ -54,6 +54,10 @@ This repository includes a website for domain, IP address, and phone-number look
 
 The free service may take a short time to wake after inactivity. The site resolves both IPv4 and IPv6 records, rejects private IP addresses for IP-detail lookups, returns structured provider errors, and limits each client to 15 lookups per minute and 300 per day. `/healthz` is the service health endpoint.
 
+### Passive OSINT lookups
+
+The web interface includes public DNS record queries (A, AAAA, MX, NS, TXT, and CAA), RDAP domain registration or public IP network allocation summaries, and a TLS certificate inspection for a public HTTPS hostname. These are passive queries with request timeouts; TLS inspection refuses hostnames resolving to non-public addresses. RDAP output intentionally omits registrant/contact entities. Use these tools only for legitimate research and respect provider terms and applicable law. The project does not provide people-search, credential/breach search, covert tracking, or port/service scanning.
+
 The rate limiter uses in-memory storage by default, which is suitable for local development and a single process but is not shared between multiple service instances and resets when the process restarts. For a scaled public deployment, create a Redis-compatible store and set the Render environment variable `RATELIMIT_STORAGE_URI` to its private connection URL.
 
 Recent results can optionally be remembered in the current browser. This is off by default; when enabled, history is stored in that browser's local storage and can be cleared from the page. Do not enable it on a shared device for lookups containing personal information. Lookup requests are processed by this server and may be sent to DNS/geolocation data providers. Use the site only for legitimate lookups and with permission.
