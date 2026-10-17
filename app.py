@@ -8,6 +8,7 @@ import re
 import secrets
 import threading
 import time
+from ipaddress import ip_address
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
@@ -31,8 +32,23 @@ from utils import (
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+if os.environ.get('TRUST_PROXY', '').lower() in {'1', 'true', 'yes'}:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
+
+PUBLIC_BASE_URL = os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
+if PUBLIC_BASE_URL:
+    parsed_public_url = urlsplit(PUBLIC_BASE_URL)
+    if (
+        parsed_public_url.scheme not in {'https', 'http'}
+        or not parsed_public_url.hostname
+        or parsed_public_url.username
+        or parsed_public_url.password
+        or parsed_public_url.path not in {'', '/'}
+        or parsed_public_url.query
+        or parsed_public_url.fragment
+    ):
+        raise RuntimeError('PUBLIC_BASE_URL must be an origin such as https://example.com.')
 
 REDIS_URL = os.environ.get('REDIS_URL')
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
@@ -91,11 +107,45 @@ def share_location():
 
 
 @app.after_request
-def protect_location_share_responses(response):
+def apply_security_headers(response):
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self' blob:; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    )
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('Referrer-Policy', 'no-referrer')
+    response.headers.setdefault(
+        'Permissions-Policy',
+        'geolocation=(self), camera=(), microphone=(), payment=()',
+    )
+    response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')
+    if request.is_secure:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     if request.path.startswith('/api/location-share'):
         response.headers['Cache-Control'] = 'no-store'
-        response.headers['Referrer-Policy'] = 'no-referrer'
     return response
+
+
+def get_share_base_url():
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL
+
+    host = request.host
+    hostname = urlsplit(f'//{host}').hostname
+    if not hostname:
+        raise ValueError('Share links require a configured PUBLIC_BASE_URL.')
+    if hostname.lower() == 'localhost':
+        return request.host_url.rstrip('/')
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        raise ValueError('Configure PUBLIC_BASE_URL before creating public share links.')
+    if address.is_loopback or address.is_private or address.is_link_local:
+        return request.host_url.rstrip('/')
+    raise ValueError('Configure PUBLIC_BASE_URL before creating public share links.')
 
 
 def share_session_key(share_id):
@@ -144,6 +194,11 @@ def get_location_share(token, token_type):
 @app.post('/api/location-share')
 @limiter.limit('5 per hour')
 def create_location_share():
+    try:
+        share_base_url = get_share_base_url()
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+
     now = time.time()
     session = {
         'owner_token': secrets.token_urlsafe(32),
@@ -172,7 +227,7 @@ def create_location_share():
 
     return jsonify(
         owner_token=session['owner_token'],
-        share_url=f'{request.url_root.rstrip("/")}/share-location#token={session["share_token"]}',
+        share_url=f'{share_base_url}/share-location#token={session["share_token"]}',
         expires_in=LOCATION_SHARE_TTL_SECONDS,
     ), 201
 

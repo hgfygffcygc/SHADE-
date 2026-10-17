@@ -8,5 +8,9 @@ services:
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
+      - key: PUBLIC_BASE_URL
+        value: https://infog-site.onrender.com
+      - key: TRUST_PROXY
+        value: "1"
       - key: REDIS_URL
         sync: false

@@ -29,6 +29,7 @@ def browser():
 
 def test_lookup_shows_provenance_and_downloads_report(live_server, browser, tmp_path):
     page = browser.new_page(accept_downloads=True)
+    page.set_default_timeout(8000)
     page.route(
         '**/api/lookup',
         lambda route: route.fulfill(
@@ -80,6 +81,7 @@ def test_location_request_occurs_only_after_button_press(live_server, browser):
         geolocation={'latitude': 10.5, 'longitude': 76.2, 'accuracy': 20},
     )
     page = context.new_page()
+    page.set_default_timeout(8000)
     submissions = []
 
     def capture_submission(route):

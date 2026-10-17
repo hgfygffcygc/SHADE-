@@ -88,7 +88,7 @@ clearHistoryButton.addEventListener('click', () => {
   renderHistory();
 });
 
-copyButton.addEventListener('click', async () => {
+copyButton?.addEventListener('click', async () => {
   if (!latestReport) return;
   const text = [
     `${latestReport.report.mode.toUpperCase()} lookup: ${latestReport.report.query}`,
@@ -106,11 +106,11 @@ copyButton.addEventListener('click', async () => {
   window.setTimeout(() => { copyStatus.textContent = ''; }, 2200);
 });
 
-exportJsonButton.addEventListener('click', () => {
+exportJsonButton?.addEventListener('click', () => {
   if (latestReport) downloadReport('json', JSON.stringify(latestReport, null, 2));
 });
 
-exportCsvButton.addEventListener('click', () => {
+exportCsvButton?.addEventListener('click', () => {
   if (!latestReport) return;
   const rows = [
     ['Field', 'Value'],
@@ -139,8 +139,12 @@ function downloadReport(extension, content) {
   const anchor = document.createElement('a');
   anchor.href = blobUrl;
   anchor.download = `infog-${latestReport.report.mode}-${Date.now()}.${extension}`;
+  anchor.style.position = 'fixed';
+  anchor.style.left = '-10000px';
+  document.body.append(anchor);
   anchor.click();
-  URL.revokeObjectURL(blobUrl);
+  window.setTimeout(() => anchor.remove(), 1000);
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 form.addEventListener('submit', async (event) => {
@@ -161,13 +165,14 @@ form.addEventListener('submit', async (event) => {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'The lookup could not be completed.');
-    renderResults(payload);
-    if (rememberHistory.checked) saveHistory(activeMode, value, payload);
+    const report = normalizeReport(payload, activeMode, value);
+    renderResults(report);
+    if (rememberHistory?.checked) saveHistory(activeMode, value, report);
   } catch (error) {
     resultCaption.textContent = 'Lookup could not be completed.';
     latestReport = null;
-    resultActions.hidden = true;
-    reportMeta.hidden = true;
+    if (resultActions) resultActions.hidden = true;
+    if (reportMeta) reportMeta.hidden = true;
     resultBody.innerHTML = '';
     const message = document.createElement('p');
     message.className = 'error-message';
@@ -178,14 +183,38 @@ form.addEventListener('submit', async (event) => {
     button.querySelector('span:first-child').textContent = 'Look up';
   }
 });
+  function normalizeReport(payload, mode, query) {
+    if (payload?.result && payload?.report) return payload;
+
+    const result = payload?.result ?? payload;
+    const sourceByMode = {
+      domain: 'System DNS resolver',
+      dns: 'Configured recursive DNS resolver',
+      ip: 'IP geolocation provider',
+      phone: 'Phone numbering metadata',
+      rdap: 'RDAP registry',
+      tls: 'TLS endpoint',
+    };
+    return {
+      result,
+      report: {
+        mode,
+        query,
+        source: sourceByMode[mode] || 'Lookup provider',
+        queried_at: new Date().toISOString(),
+        caveat: 'This server response did not include detailed source metadata.',
+      },
+    };
+  }
+
 
 function renderResults(payload) {
   const { result, report } = payload;
-  latestReport = payload;
-  resultActions.hidden = false;
-  reportMeta.hidden = false;
-  reportSource.textContent = report.source;
-  reportTime.textContent = new Date(report.queried_at).toLocaleString();
+    if (resultActions) resultActions.hidden = false;
+    if (reportMeta) reportMeta.hidden = false;
+    if (reportSource) reportSource.textContent = report.source;
+    if (reportTime) reportTime.textContent = new Date(report.queried_at).toLocaleString();
+    if (reportCaveat) reportCaveat.textContent = report.caveat;
   reportCaveat.textContent = report.caveat;
   resultCaption.textContent = 'Lookup complete.';
   resultBody.innerHTML = '';
@@ -225,6 +254,7 @@ function saveHistory(mode, value, report) {
 }
 
 function renderHistory() {
+  if (!historyList || !rememberHistory || !clearHistoryButton) return;
   historyList.replaceChildren();
   const history = rememberHistory.checked ? readHistory() : [];
   clearHistoryButton.disabled = history.length === 0;

@@ -54,6 +54,10 @@ This repository includes a website for domain, IP address, and phone-number look
 
 The free service may take a short time to wake after inactivity. The site resolves both IPv4 and IPv6 records, rejects private IP addresses for IP-detail lookups, returns structured provider errors, and limits each client to 15 lookups per minute and 300 per day. `/healthz` is the service health endpoint.
 
+### Web security
+
+The web app sends a restrictive Content Security Policy, anti-framing and MIME-sniffing headers, a no-referrer policy, and a Permissions Policy that limits geolocation to this site while disabling camera and microphone. HSTS is sent only on HTTPS requests. Share links use the configured `PUBLIC_BASE_URL`, not an arbitrary request Host header; the Render blueprint sets the canonical service origin. `TRUST_PROXY=1` is enabled for Render's single trusted edge proxy so rate limits can use the originating client address; disable it when running directly without that proxy. CI runs `pip-audit`, CodeQL scans Python code, and Dependabot checks Python and GitHub Actions dependencies weekly.
+
 Successful lookups include a source, UTC query time, query value, and an interpretation caveat. Results can be copied or downloaded as JSON or CSV; exports preserve the source and caveat alongside the findings.
 
 ### Passive OSINT lookups

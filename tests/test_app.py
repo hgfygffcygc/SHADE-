@@ -61,6 +61,38 @@ def test_homepage_and_health_check(client):
     assert share_page.headers['Cache-Control'] == 'no-store'
     assert health.status_code == 200
     assert health.json == {'status': 'ok'}
+    assert page.headers['X-Content-Type-Options'] == 'nosniff'
+    assert page.headers['X-Frame-Options'] == 'DENY'
+    assert page.headers['Referrer-Policy'] == 'no-referrer'
+    assert "frame-ancestors 'none'" in page.headers['Content-Security-Policy']
+    assert 'geolocation=(self)' in page.headers['Permissions-Policy']
+    assert page.headers['Cross-Origin-Opener-Policy'] == 'same-origin'
+    assert page.headers.get('Strict-Transport-Security') is None
+    assert page.headers['X-Content-Type-Options'] == 'nosniff'
+
+
+def test_hsts_is_only_sent_for_secure_requests(client):
+    response = client.get('/', base_url='https://localhost')
+
+    assert response.headers['Strict-Transport-Security'].startswith('max-age=31536000')
+
+
+def test_share_link_rejects_unconfigured_public_host(client, monkeypatch):
+    monkeypatch.setattr(site, 'PUBLIC_BASE_URL', '')
+
+    response = client.post('/api/location-share', json={}, base_url='https://attacker.example')
+
+    assert response.status_code == 400
+    assert 'PUBLIC_BASE_URL' in response.json['error']
+
+
+def test_share_link_uses_configured_public_origin(client, monkeypatch):
+    monkeypatch.setattr(site, 'PUBLIC_BASE_URL', 'https://infog.example.test')
+
+    response = client.post('/api/location-share', json={}, base_url='http://attacker.example')
+
+    assert response.status_code == 201
+    assert response.json['share_url'].startswith('https://infog.example.test/')
 
 
 def test_consent_location_share_owner_flow(client):
