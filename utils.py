@@ -1,9 +1,47 @@
+import ipaddress
 import socket
 import phonenumbers
 import requests
+from phonenumbers import carrier
 from phonenumbers import geocoder
 import os 
 import platform
+
+def lookup_domain(domain):
+    return socket.gethostbyname(domain.strip())
+
+
+def lookup_domain_records(domain):
+    records = {'IPv4 addresses': set(), 'IPv6 addresses': set()}
+    for family, _socktype, _protocol, _canonical_name, address in socket.getaddrinfo(
+        domain.strip(), None, socket.AF_UNSPEC, socket.SOCK_STREAM
+    ):
+        parsed_address = ipaddress.ip_address(address[0])
+        key = 'IPv4 addresses' if family == socket.AF_INET else 'IPv6 addresses'
+        records[key].add(str(parsed_address))
+
+    return {
+        key: ', '.join(sorted(addresses)) or 'No records found'
+        for key, addresses in records.items()
+    }
+
+
+def lookup_ip(ip_address):
+    response = requests.get(
+        f"https://geolocation-db.com/json/{ip_address.strip()}&position=true",
+        timeout=12,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def lookup_phone(phone_number):
+    parsed_number = phonenumbers.parse(phone_number.strip())
+    return (
+        geocoder.description_for_number(parsed_number, 'en'),
+        carrier.name_for_number(parsed_number, 'en'),
+    )
+
 
 def tool_name():
     print('''
@@ -21,7 +59,7 @@ For more visit: https://github/Tech-Sec
 
 
 def domain_name():
-    print(socket.gethostbyname(input('Domain name: ')))
+    print(lookup_domain(input('Domain name: ')))
 
 
 def your_ip():
@@ -35,24 +73,15 @@ def your_ip():
 
 def ip_lookup():
     enter_ip = input('IP Address: ')
-    response = requests.get(f"https://geolocation-db.com/json/{enter_ip}&position=true").json()
-    for key, value in response.items():
+    for key, value in lookup_ip(enter_ip).items():
         print(key, ' : ', value)
 
 
 def ph_num_lookup():
     your_ph_num = input('Your Number: ')
-    phone_number = phonenumbers.parse(your_ph_num)
-    # put your phonenumber with the country code eg:+1xxxxxxxx
-    print(geocoder.description_for_number(phone_number,
-                                          'en'))
-
-
-    from phonenumbers import carrier
-    service_provider = phonenumbers.parse(your_ph_num)
-    # put your phonenumber with the country code eg:+1xxxxxxxx
-    print(carrier.name_for_number(service_provider,
-                                  'en'))
+    region, service_provider = lookup_phone(your_ph_num)
+    print(region)
+    print(service_provider)
     
     
 def ip_grabber():

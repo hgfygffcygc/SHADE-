@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f5ee">
+  <meta name="description" content="Simple domain, IP address, and phone number lookups.">
+  <title>InfoG | Lookup tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="InfoG home"><span class="brand-mark">i</span> InfoG</a>
+    <nav class="topbar-nav" aria-label="Main navigation">
+      <a class="topbar-link" href="/my-location">My device location <span aria-hidden="true">→</span></a>
+      <span class="topbar-note"><span class="status-dot"></span> Lookup tools</span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">INFORMATION, AT A GLANCE</p>
+      <h1 id="page-title">Look closer.<br><span>Know the basics.</span></h1>
+      <p class="intro-copy">Quick reference lookups for domains, IP addresses, and phone numbers.</p>
+    </section>
+
+    <section class="workspace" aria-label="Lookup tool">
+      <div class="tool-panel">
+        <div class="panel-heading">
+          <span class="step-mark">01</span>
+          <div><h2>Choose a lookup</h2><p>Select what you want to find.</p></div>
+        </div>
+
+        <div class="mode-tabs" role="tablist" aria-label="Lookup type">
+          <button class="mode-tab active" type="button" role="tab" aria-selected="true" data-mode="domain">
+            <span class="tab-icon" aria-hidden="true">↗</span><span>Domain</span>
+          </button>
+          <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="ip">
+            <span class="tab-icon" aria-hidden="true">⌘</span><span>IP address</span>
+          </button>
+          <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="phone">
+            <span class="tab-icon" aria-hidden="true">#</span><span>Phone</span>
+          </button>
+        </div>
+
+        <form id="lookup-form">
+          <label for="lookup-value" id="input-label">Domain name</label>
+          <div class="input-row">
+            <input id="lookup-value" name="value" type="text" autocomplete="off" placeholder="example.com" required>
+            <button id="lookup-button" type="submit"><span>Look up</span><span aria-hidden="true">→</span></button>
+          </div>
+          <p class="input-hint" id="input-hint">Enter a domain, with or without https://</p>
+        </form>
+
+        <div class="privacy-note"><span aria-hidden="true">i</span> Lookups are sent to this server and its data providers.</div>
+        <label class="remember-option" for="remember-history">
+          <input id="remember-history" type="checkbox">
+          <span>Remember recent lookups on this device</span>
+        </label>
+      </div>
+
+      <section class="result-panel" aria-labelledby="results-heading" aria-live="polite">
+        <div class="panel-heading result-heading">
+          <span class="step-mark">02</span>
+          <div><h2 id="results-heading">Results</h2><p id="result-caption">Your lookup will appear here.</p></div>
+        </div>
+        <div class="result-body" id="result-body">
+          <div class="empty-art" aria-hidden="true"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="orbit-core">?</span></div>
+          <p class="empty-title">Nothing to show yet</p>
+          <p class="empty-copy">Choose a lookup and enter a value to get started.</p>
+        </div>
+        <div class="result-actions" id="result-actions" hidden>
+          <button class="utility-button" id="copy-results" type="button" title="Copy results" aria-label="Copy results">Copy results</button>
+          <span class="copy-status" id="copy-status" role="status"></span>
+        </div>
+      </section>
+    </section>
+
+    <section class="history-section" aria-labelledby="history-heading">
+      <div class="history-heading">
+        <div><p class="eyebrow">ON THIS DEVICE</p><h2 id="history-heading">Recent lookups</h2></div>
+        <button class="utility-button" id="clear-history" type="button" disabled>Clear history</button>
+      </div>
+      <div id="history-list" class="history-list"><p class="history-empty">History is off. Enable it above to remember recent lookups in this browser only.</p></div>
+    </section>
+
+    <section class="info-strip" aria-label="Lookup notes">
+      <div><span class="info-number">A</span><p><strong>Domain</strong><br>Finds the resolved IP address for a hostname.</p></div>
+      <div><span class="info-number">B</span><p><strong>IP address</strong><br>Shows approximate network and location data.</p></div>
+      <div><span class="info-number">C</span><p><strong>Phone</strong><br>Shows numbering region and carrier when available.</p></div>
+    </section>
+  </main>
+
+  <footer><span>InfoG</span><span>For educational and legitimate reference use.</span><a href="/healthz">Service status</a></footer>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>
