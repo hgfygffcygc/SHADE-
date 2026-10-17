@@ -101,3 +101,15 @@ def test_location_request_occurs_only_after_button_press(live_server, browser):
     assert submissions[0]['coordinates']['latitude'] == 10.5
     assert page.url.endswith('/share-location')
     context.close()
+
+
+def test_network_diagnostics_are_disabled_in_default_web_config(live_server, browser):
+    page = browser.new_page()
+    page.set_default_timeout(8000)
+    page.goto(f'{live_server}/network-tools', wait_until='domcontentloaded')
+
+    assert page.get_by_text('Nmap is disabled or unavailable', exact=False).is_visible()
+    assert page.get_by_text('Offline capture analysis is disabled or tshark is unavailable', exact=False).is_visible()
+    assert page.locator('#nmap-form').count() == 0
+    assert page.locator('#pcap-form').count() == 0
+    page.close()

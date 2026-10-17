@@ -152,6 +152,19 @@ input::placeholder { color: #a0a79f; }
 .recipient-share-button:disabled { opacity: .5; cursor: not-allowed; }
 .recipient-notes { margin-top: 27px; }
 .share-recipient-main .location-intro { padding-top: 58px; }
+.diagnostics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 44px; }
+.diagnostic-panel { min-width: 0; padding: 24px; border: 1px solid var(--line); background: var(--white); box-shadow: 0 18px 48px #243c2b0d; }
+.diagnostic-warning { margin: 20px 0; padding: 12px; border-left: 3px solid #b9832c; background: #f8f3e7; color: #645338; font-size: 11px; line-height: 1.65; }
+.diagnostic-disabled { padding: 12px; background: #f3f4ef; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.diagnostic-form { display: grid; gap: 10px; }
+.diagnostic-form input:not([type="checkbox"]):not([type="file"]) { width: 100%; }
+.diagnostic-form input[type="file"] { width: 100%; height: auto; min-height: 46px; padding: 10px; font-family: var(--sans); }
+.port-range { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.port-range label { margin: 0 0 7px; }
+.diagnostic-form .consent-check { margin: 4px 0; }
+.diagnostic-status { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.diagnostic-result { margin-top: 14px; }
+.diagnostic-result:empty { display: none; }
 
 .info-strip { display: grid; grid-template-columns: repeat(3, 1fr); margin: 28px 0 55px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .info-strip > div { display: flex; gap: 13px; padding: 18px 16px 18px 0; }
@@ -175,6 +188,8 @@ footer { display: flex; justify-content: space-between; padding: 17px 0 24px; bo
   .location-results { padding: 22px 18px; }
   .location-result { min-height: 240px; }
   .recipient-card { padding: 22px 18px; }
+  .diagnostics-grid { grid-template-columns: 1fr; gap: 12px; }
+  .diagnostic-panel { padding: 20px 16px; }
   .invite-heading { align-items: flex-start; }
   .invite-heading h2 { font-size: 16px; }
   .invite-expiry { font-size: 8px; }

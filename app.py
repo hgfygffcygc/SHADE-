@@ -6,6 +6,7 @@ import math
 import os
 import re
 import secrets
+import shutil
 import threading
 import time
 from ipaddress import ip_address
@@ -29,9 +30,11 @@ from utils import (
     lookup_rdap,
     lookup_tls_certificate,
 )
+from network_tools import analyze_capture, scan_private_host
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024
+app.config['MAX_FORM_MEMORY_SIZE'] = 64 * 1024
 if os.environ.get('TRUST_PROXY', '').lower() in {'1', 'true', 'yes'}:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.logger.setLevel(logging.INFO)
@@ -61,6 +64,10 @@ limiter = Limiter(
     storage_uri=os.environ.get('RATELIMIT_STORAGE_URI') or REDIS_URL or 'memory://',
 )
 LOCATION_SHARE_TTL_SECONDS = 10 * 60
+ENABLE_NMAP = os.environ.get('ENABLE_NMAP', '').lower() in {'1', 'true', 'yes'}
+ENABLE_PCAP_ANALYSIS = os.environ.get('ENABLE_PCAP_ANALYSIS', '').lower() in {'1', 'true', 'yes'}
+NMAP_PATH = shutil.which('nmap')
+TSHARK_PATH = shutil.which('tshark')
 location_shares = {}
 location_shares_lock = threading.Lock()
 
@@ -88,6 +95,13 @@ def normalize_domain(value):
     return hostname
 
 
+@app.before_request
+def limit_request_body_sizes():
+    if request.path != '/api/network/pcap' and request.content_length is not None:
+        if request.content_length > 8 * 1024:
+            return jsonify(error='Request body is too large.'), 413
+
+
 @app.get('/')
 def index():
     return render_template('index.html')
@@ -96,6 +110,62 @@ def index():
 @app.get('/my-location')
 def my_location():
     return render_template('my_location.html')
+
+
+@app.get('/network-tools')
+def network_tools_page():
+    return render_template(
+        'network_tools.html',
+        nmap_enabled=ENABLE_NMAP and bool(NMAP_PATH) and not PUBLIC_BASE_URL,
+        pcap_enabled=ENABLE_PCAP_ANALYSIS and bool(TSHARK_PATH) and not PUBLIC_BASE_URL,
+    )
+
+
+@app.post('/api/network/nmap')
+@limiter.limit('2 per hour')
+def api_network_nmap():
+    if PUBLIC_BASE_URL or not ENABLE_NMAP or not NMAP_PATH:
+        return jsonify(error='Nmap diagnostics are disabled or Nmap is not installed on this server.'), 503
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get('authorized') is not True:
+        return jsonify(error='Confirm that you own or have explicit authorization to test this host.'), 400
+    target = payload.get('target')
+    start_port = payload.get('start_port')
+    end_port = payload.get('end_port')
+    if (
+        not isinstance(target, str)
+        or isinstance(start_port, bool)
+        or isinstance(end_port, bool)
+        or not isinstance(start_port, int)
+        or not isinstance(end_port, int)
+    ):
+        return jsonify(error='Provide a private IPv4 target and integer TCP port bounds.'), 400
+    try:
+        result = scan_private_host(target, start_port, end_port, NMAP_PATH)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    except (OSError, RuntimeError, TimeoutError) as error:
+        app.logger.warning('Local Nmap check failed: %s', error)
+        return jsonify(error=str(error)), 502
+    return jsonify(result=result)
+
+
+@app.post('/api/network/pcap')
+@limiter.limit('3 per hour')
+def api_network_pcap():
+    if PUBLIC_BASE_URL or not ENABLE_PCAP_ANALYSIS or not TSHARK_PATH:
+        return jsonify(error='Offline capture analysis is disabled or tshark is not installed on this server.'), 503
+    capture = request.files.get('capture')
+    if capture is None:
+        return jsonify(error='Choose a .pcap or .pcapng capture file.'), 400
+    try:
+        result = analyze_capture(capture.stream, capture.filename, TSHARK_PATH)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    except (OSError, RuntimeError, TimeoutError) as error:
+        app.logger.warning('Offline capture analysis failed: %s', error)
+        return jsonify(error=str(error)), 502
+    return jsonify(result=result)
 
 
 @app.get('/share-location')

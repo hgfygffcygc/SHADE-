@@ -1,8 +1,11 @@
+import io
+
 import pytest
 import fakeredis
 
 import app as site
 import utils
+import network_tools
 
 
 def create_location_share(client):
@@ -75,6 +78,79 @@ def test_hsts_is_only_sent_for_secure_requests(client):
     response = client.get('/', base_url='https://localhost')
 
     assert response.headers['Strict-Transport-Security'].startswith('max-age=31536000')
+
+
+def test_network_diagnostics_page_and_apis_are_disabled_by_default(client, monkeypatch):
+    monkeypatch.setattr(site, 'ENABLE_NMAP', False)
+    monkeypatch.setattr(site, 'ENABLE_PCAP_ANALYSIS', False)
+    monkeypatch.setattr(site, 'NMAP_PATH', None)
+    monkeypatch.setattr(site, 'TSHARK_PATH', None)
+
+    page = client.get('/network-tools')
+    nmap = client.post('/api/network/nmap', json={})
+    pcap = client.post('/api/network/pcap', data={})
+
+    assert page.status_code == 200
+    assert b'Nmap is disabled or unavailable' in page.data
+    assert nmap.status_code == 503
+    assert pcap.status_code == 503
+
+
+def test_nmap_route_requires_explicit_authorization(client, monkeypatch):
+    monkeypatch.setattr(site, 'ENABLE_NMAP', True)
+    monkeypatch.setattr(site, 'NMAP_PATH', 'nmap')
+
+    response = client.post('/api/network/nmap', json={'target': '192.168.1.20', 'start_port': 80, 'end_port': 80})
+
+    assert response.status_code == 400
+    assert 'authorization' in response.json['error'].lower()
+
+
+def test_nmap_route_validates_scope_and_returns_bounded_result(client, monkeypatch):
+    monkeypatch.setattr(site, 'ENABLE_NMAP', True)
+    monkeypatch.setattr(site, 'NMAP_PATH', 'nmap')
+    monkeypatch.setattr(
+        site,
+        'scan_private_host',
+        lambda target, start, end, _path: {
+            'target': target,
+            'ports': [{'protocol': 'tcp', 'port': start, 'state': 'open', 'service': 'http'}],
+            'note': f'Only ports {start}-{end}',
+        },
+    )
+
+    response = client.post('/api/network/nmap', json={
+        'target': '192.168.1.20', 'start_port': 80, 'end_port': 80, 'authorized': True,
+    })
+
+    assert response.status_code == 200
+    assert response.json['result']['target'] == '192.168.1.20'
+
+
+def test_pcap_endpoint_requires_upload_consent(client, monkeypatch):
+    monkeypatch.setattr(site, 'ENABLE_PCAP_ANALYSIS', True)
+    monkeypatch.setattr(site, 'TSHARK_PATH', 'tshark')
+
+    response = client.post('/api/network/pcap', data={})
+
+    assert response.status_code == 400
+
+
+def test_network_tools_refuse_public_origin_even_if_enabled(client, monkeypatch):
+    monkeypatch.setattr(site, 'PUBLIC_BASE_URL', 'https://infog.example.test')
+    monkeypatch.setattr(site, 'ENABLE_NMAP', True)
+    monkeypatch.setattr(site, 'ENABLE_PCAP_ANALYSIS', True)
+    monkeypatch.setattr(site, 'NMAP_PATH', 'nmap')
+    monkeypatch.setattr(site, 'TSHARK_PATH', 'tshark')
+
+    page = client.get('/network-tools')
+    nmap = client.post('/api/network/nmap', json={'authorized': True})
+    pcap = client.post('/api/network/pcap', data={})
+
+    assert b'Nmap is disabled' in page.data
+    assert b'Offline capture analysis is disabled' in page.data
+    assert nmap.status_code == 503
+    assert pcap.status_code == 503
 
 
 def test_share_link_rejects_unconfigured_public_host(client, monkeypatch):
@@ -243,6 +319,60 @@ def test_tls_helper_refuses_non_public_resolved_addresses(monkeypatch):
 
     with pytest.raises(ValueError, match='public HTTPS service'):
         utils.lookup_tls_certificate('localhost')
+
+
+@pytest.mark.parametrize('target', ['8.8.8.8', '127.0.0.1', '169.254.1.2', '2001:4860:4860::8888'])
+def test_nmap_helper_rejects_out_of_scope_targets(target):
+    with pytest.raises(ValueError):
+        network_tools.scan_private_host(target, 80, 80)
+
+
+def test_nmap_helper_limits_range_and_uses_argument_list(monkeypatch):
+    calls = []
+
+    class Completed:
+        returncode = 0
+        stdout = '<nmaprun><host><ports><port protocol="tcp" portid="443"><state state="open"/><service name="https"/></port></ports></host></nmaprun>'
+
+    monkeypatch.setattr(network_tools.subprocess, 'run', lambda command, **kwargs: calls.append((command, kwargs)) or Completed())
+
+    result = network_tools.scan_private_host('192.168.1.12', 443, 443, 'nmap')
+
+    assert result['ports'][0]['port'] == 443
+    command, kwargs = calls[0]
+    assert command[-1] == '192.168.1.12'
+    assert '-p' in command and '443-443' in command
+    assert kwargs['shell'] is False if 'shell' in kwargs else True
+    with pytest.raises(ValueError, match='at most'):
+        network_tools.scan_private_host('192.168.1.12', 1, 100, 'nmap')
+
+
+def test_capture_analysis_caps_packets_and_deletes_temporary_file(monkeypatch, tmp_path):
+    real_named_temp = network_tools.tempfile.NamedTemporaryFile
+
+    def named_temp(*args, **kwargs):
+        kwargs['dir'] = tmp_path
+        return real_named_temp(*args, **kwargs)
+
+    class Completed:
+        returncode = 0
+        stdout = 'DNS\t192.0.2.10\t192.0.2.53\t\t\nTCP\t192.0.2.10\t192.0.2.53\t\t\n'
+
+    monkeypatch.setattr(network_tools.tempfile, 'NamedTemporaryFile', named_temp)
+    monkeypatch.setattr(network_tools.subprocess, 'run', lambda *_args, **_kwargs: Completed())
+
+    result = network_tools.analyze_capture(io.BytesIO(b'pcap sample'), 'capture.pcap', 'tshark')
+
+    assert result['packets_analyzed'] == 2
+    assert result['protocols'][0] == {'name': 'DNS', 'packets': 1}
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_capture_analysis_rejects_oversized_file():
+    oversized = io.BytesIO(b'x' * (network_tools.MAX_PCAP_BYTES + 1))
+
+    with pytest.raises(ValueError, match='5 MB or smaller'):
+        network_tools.analyze_capture(oversized, 'large.pcap', 'tshark')
 
 
 def test_non_object_json_is_rejected(client):

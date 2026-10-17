@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f5ee">
+  <meta name="description" content="Bounded, authorized private-host checks and offline packet-capture summaries.">
+  <title>Network diagnostics | InfoG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="InfoG home"><span class="brand-mark">i</span> InfoG</a>
+    <nav class="topbar-nav" aria-label="Main navigation">
+      <a class="topbar-link" href="/">Lookup tools <span aria-hidden="true">→</span></a>
+      <span class="topbar-note"><span class="status-dot"></span> Authorized diagnostics</span>
+    </nav>
+  </header>
+
+  <main class="self-location-main">
+    <section class="intro location-intro" aria-labelledby="page-title">
+      <p class="eyebrow">LOCAL NETWORK · OFFLINE CAPTURES</p>
+      <h1 id="page-title">Inspect carefully.<br><span>Stay in scope.</span></h1>
+      <p class="intro-copy">Use these diagnostics only on systems you own or are explicitly authorized to assess.</p>
+    </section>
+
+    <div class="diagnostics-grid">
+      <section class="diagnostic-panel" aria-labelledby="nmap-heading">
+        <div class="panel-heading">
+          <span class="step-mark">01</span>
+          <div><h2 id="nmap-heading">Nmap private-host check</h2><p>TCP connect check against one private IPv4 address.</p></div>
+        </div>
+        <p class="diagnostic-warning">This tool actively sends probes. It is restricted to one RFC1918 IPv4 address and at most 32 selected TCP ports. No subnet sweeps, UDP scans, scripts, or OS detection.</p>
+        {% if nmap_enabled %}
+        <form id="nmap-form" class="diagnostic-form">
+          <label for="nmap-target">Private IPv4 address</label>
+          <input id="nmap-target" name="target" inputmode="decimal" placeholder="192.168.1.10" required>
+          <div class="port-range">
+            <div><label for="port-start">First TCP port</label><input id="port-start" type="number" min="1" max="65535" value="80" required></div>
+            <div><label for="port-end">Last TCP port</label><input id="port-end" type="number" min="1" max="65535" value="80" required></div>
+          </div>
+          <label class="consent-check" for="authorized-scan"><input id="authorized-scan" type="checkbox"><span>I own this host or have explicit permission to test it.</span></label>
+          <button class="location-button" type="submit">Run bounded check</button>
+        </form>
+        {% else %}
+        <p class="diagnostic-disabled">Nmap is disabled or unavailable on this server. For safety, public deployments keep active scanning disabled by default.</p>
+        {% endif %}
+        <div class="diagnostic-result" id="nmap-result" aria-live="polite"></div>
+      </section>
+
+      <section class="diagnostic-panel" aria-labelledby="pcap-heading">
+        <div class="panel-heading">
+          <span class="step-mark">02</span>
+          <div><h2 id="pcap-heading">Offline capture summary</h2><p>Summarize an existing capture; this does not capture live traffic.</p></div>
+        </div>
+        <p class="diagnostic-warning">Packet captures may contain credentials, personal data, and confidential content. Upload only captures you are authorized to analyze. Files are limited to 5 MB, processed temporarily, and deleted after analysis.</p>
+        {% if pcap_enabled %}
+        <form id="pcap-form" class="diagnostic-form">
+          <label for="pcap-file">PCAP or PCAPNG file</label>
+          <input id="pcap-file" name="capture" type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap" required>
+          <label class="consent-check" for="authorized-capture"><input id="authorized-capture" type="checkbox"><span>I am authorized to analyze this capture and its contents.</span></label>
+          <button class="location-button" type="submit">Analyze offline capture</button>
+        </form>
+        {% else %}
+        <p class="diagnostic-disabled">Offline capture analysis is disabled or tshark is unavailable. Public deployments keep this upload feature disabled by default.</p>
+        {% endif %}
+        <div class="diagnostic-result" id="pcap-result" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer><span>InfoG</span><span>Use only within your authorization.</span><a href="/healthz">Service status</a></footer>
+  <script src="{{ url_for('static', filename='network_tools.js') }}" defer></script>
+</body>
+</html>

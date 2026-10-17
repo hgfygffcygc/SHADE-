@@ -12,5 +12,9 @@ services:
         value: https://infog-site.onrender.com
       - key: TRUST_PROXY
         value: "1"
+      - key: ENABLE_NMAP
+        value: "false"
+      - key: ENABLE_PCAP_ANALYSIS
+        value: "false"
       - key: REDIS_URL
         sync: false

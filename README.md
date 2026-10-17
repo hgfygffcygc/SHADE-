@@ -62,7 +62,19 @@ Successful lookups include a source, UTC query time, query value, and an interpr
 
 ### Passive OSINT lookups
 
-The web interface includes public DNS record queries (A, AAAA, MX, NS, TXT, and CAA), RDAP domain registration or public IP network allocation summaries, and a TLS certificate inspection for a public HTTPS hostname. These are passive queries with request timeouts; TLS inspection refuses hostnames resolving to non-public addresses. RDAP output intentionally omits registrant/contact entities. Use these tools only for legitimate research and respect provider terms and applicable law. The project does not provide people-search, credential/breach search, covert tracking, or port/service scanning.
+The web interface includes public DNS record queries (A, AAAA, MX, NS, TXT, and CAA), RDAP domain registration or public IP network allocation summaries, and a TLS certificate inspection for a public HTTPS hostname. These are passive queries with request timeouts; TLS inspection refuses hostnames resolving to non-public addresses. RDAP output intentionally omits registrant/contact entities. Use these tools only for legitimate research and respect provider terms and applicable law. The project does not provide people-search, credential/breach search, covert tracking, broad network scans, or live packet capture.
+
+### Local network diagnostics
+
+The `/network-tools` page has optional Nmap and Wireshark-compatible capture analysis. Both are disabled unless explicitly enabled with `ENABLE_NMAP=1` and/or `ENABLE_PCAP_ANALYSIS=1`, and the Render blueprint explicitly keeps both disabled. Install Nmap and Wireshark's `tshark` command-line utility on a trusted local machine before enabling them. On PowerShell, set the variables for the current session and start the app:
+
+```powershell
+$env:ENABLE_NMAP = "1"
+$env:ENABLE_PCAP_ANALYSIS = "1"
+python app.py
+```
+
+Nmap requires an authorization acknowledgement, accepts only one RFC1918 IPv4 host (not a subnet), uses a TCP connect scan, and caps the chosen port range at 32 ports with a 30-second timeout and two requests per hour. Capture analysis is offline-only: it never starts live capture, accepts PCAP/PCAPNG up to 5 MB, analyzes at most 10,000 packets with a 15-second timeout, and deletes the temporary upload after processing. Packet captures can contain sensitive contents; only analyze captures you are authorized to inspect. Do not enable these features on an internet-facing deployment.
 
 The rate limiter and temporary share sessions use in-memory storage by default for local development. Configure a Redis-compatible database to share rate limits and consent-share sessions across server workers and restarts: create a Redis instance, then set the Render `REDIS_URL` environment variable to its private connection URL. The Render blueprint declares `REDIS_URL` as an optional environment variable so its secret value can be added in the dashboard. Sessions still expire after 10 minutes; configure Redis persistence according to your deployment policy.
 
