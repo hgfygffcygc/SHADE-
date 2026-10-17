@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f5ee">
+  <meta name="description" content="View your own location and available device details after granting browser permission.">
+  <title>My device location | InfoG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="InfoG home"><span class="brand-mark">i</span> InfoG</a>
+    <nav class="topbar-nav" aria-label="Main navigation">
+      <a class="topbar-link" href="/">Lookup tools <span aria-hidden="true">→</span></a>
+      <span class="topbar-note"><span class="status-dot"></span> Private by design</span>
+    </nav>
+  </header>
+
+  <main class="self-location-main">
+    <section class="intro location-intro" aria-labelledby="page-title">
+      <p class="eyebrow">YOUR DEVICE · YOUR CHOICE</p>
+      <h1 id="page-title">Your location.<br><span>Only when you ask.</span></h1>
+      <p class="intro-copy">Use your browser’s location permission to view your current coordinates and device details on this page.</p>
+    </section>
+
+    <section class="location-workspace" aria-label="Your device location">
+      <div class="location-consent">
+        <div class="panel-heading">
+          <span class="step-mark">01</span>
+          <div><h2>Location permission</h2><p>Your browser will ask before sharing a location with this page.</p></div>
+        </div>
+        <p class="location-privacy">Coordinates and device details are rendered in your browser. This page does not submit them to the InfoG server or save them in browser history.</p>
+        <button class="location-button" id="get-location" type="button"><span aria-hidden="true">◎</span> Show my location</button>
+        <p class="location-status" id="location-status" role="status">Nothing is being accessed. Press the button to begin.</p>
+        <button class="utility-button location-clear" id="clear-location" type="button" disabled>Clear details</button>
+      </div>
+
+      <section class="location-results" aria-labelledby="location-results-heading" aria-live="polite">
+        <div class="panel-heading">
+          <span class="step-mark">02</span>
+          <div><h2 id="location-results-heading">On this device</h2><p>Values available to this browser session.</p></div>
+        </div>
+        <div id="location-result" class="location-result">
+          <div class="empty-art" aria-hidden="true"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="orbit-core">?</span></div>
+          <p class="empty-title">No details requested</p>
+          <p class="empty-copy">Your browser won’t share location until you choose to allow it.</p>
+        </div>
+      </section>
+    </section>
+
+    <section class="invite-section" aria-labelledby="invite-heading">
+      <div class="invite-heading">
+        <div><p class="eyebrow">OPTIONAL · EXPLICIT CONSENT</p><h2 id="invite-heading">Invite someone to share</h2></div>
+        <span class="invite-expiry">LINK EXPIRES IN 10 MIN</span>
+      </div>
+      <p class="invite-description">Create a one-time link for someone who chooses to share their current location. The recipient sees what will be shared, presses the share button, and then grants browser location permission. Visiting the link alone does nothing.</p>
+      <button class="location-button invite-create" id="create-share" type="button">Create consent link <span aria-hidden="true">→</span></button>
+      <div class="invite-result" id="invite-result" hidden>
+        <label for="share-link">Share this link with the consenting person</label>
+        <div class="input-row invite-link-row">
+          <input id="share-link" type="url" readonly>
+          <button class="utility-button" id="copy-share-link" type="button">Copy link</button>
+        </div>
+        <p class="location-status" id="invite-status" role="status">Waiting for the recipient to choose whether to share.</p>
+        <div class="shared-details" id="shared-details" hidden></div>
+        <button class="utility-button location-clear" id="close-share" type="button">Cancel and delete session</button>
+      </div>
+    </section>
+
+    <section class="location-notes" aria-label="Privacy details">
+      <div><span class="info-number">01</span><p><strong>Permission first</strong><br>Only the button above starts a location request. You can deny it in your browser.</p></div>
+      <div><span class="info-number">02</span><p><strong>Separate sharing link</strong><br>Invite links disclose what will be sent and require a separate explicit opt-in.</p></div>
+      <div><span class="info-number">03</span><p><strong>Browser limits</strong><br>Device model and precise GPS availability depend on the browser, device, and connection.</p></div>
+    </section>
+  </main>
+
+  <footer><span>InfoG</span><span>Location is requested only for your own device.</span><a href="/healthz">Service status</a></footer>
+  <script src="{{ url_for('static', filename='my_location.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='share_dashboard.js') }}" defer></script>
+</body>
+</html>

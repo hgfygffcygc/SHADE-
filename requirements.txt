@@ -1,0 +1,6 @@
+phonenumbers
+requests
+Flask
+Flask-Limiter
+gunicorn
+pytest
